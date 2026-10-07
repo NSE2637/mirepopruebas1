@@ -33,12 +33,7 @@ if (
 }
 $sql = "INSERT INTO pacientes (nombre, ubicacion) VALUES (?, ?)";
 $stmt = $conexion->prepare($sql);
-$stmt->bind_param(
-    "ss",
-    $nombre,
-    $ubicacion
-);
-if ($stmt->execute()) {
+if ($stmt->execute([$nombre, $ubicacion])) {
     header(
         "Location: admin.php"
     );

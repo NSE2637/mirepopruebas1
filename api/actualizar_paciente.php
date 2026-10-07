@@ -41,13 +41,7 @@ $sql = "UPDATE pacientes
 
         WHERE id = ?";
 $stmt = $conexion->prepare($sql);
-$stmt->bind_param(
-    "ssi",
-    $nombre,
-    $ubicacion,
-    $id
-);
-$stmt->execute();
+$stmt->execute([$nombre, $ubicacion, $id]);
 header(
     "Location: admin.php"
 );

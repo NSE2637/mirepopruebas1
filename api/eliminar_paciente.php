@@ -7,11 +7,7 @@ if ($id > 0) {
     $stmt = $conexion->prepare(
         "DELETE FROM pacientes WHERE id = ?"
     );
-    $stmt->bind_param(
-        "i",
-        $id
-    );
-    $stmt->execute();
+    $stmt->execute([$id]);
 }
 header(
     "Location: admin.php"

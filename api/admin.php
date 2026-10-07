@@ -6,29 +6,21 @@ $ubicacion = $_GET["ubicacion"] ?? "";
 
 $sql = "SELECT * FROM pacientes WHERE 1=1";
 $parametros = [];
-$tipos = "";
 
 if ($buscar !== "") {
-    $sql .= " AND nombre LIKE ?";
+    $sql .= " AND nombre ILIKE ?";
     $parametros[] = "%" . $buscar . "%";
-    $tipos .= "s";
 }
 
 if ($ubicacion !== "") {
     $sql .= " AND ubicacion = ?";
     $parametros[] = $ubicacion;
-    $tipos .= "s";
 }
 
 $sql .= " ORDER BY id DESC";
 $stmt = $conexion->prepare($sql);
-
-if (!empty($parametros)) {
-    $stmt->bind_param($tipos, ...$parametros);
-}
-
-$stmt->execute();
-$resultado = $stmt->get_result();
+$stmt->execute($parametros);
+$pacientes = $stmt->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -91,8 +83,8 @@ $resultado = $stmt->get_result();
                             </tr>
                         </thead>
                         <tbody>
-                        <?php if ($resultado->num_rows > 0): ?>
-                            <?php while ($paciente = $resultado->fetch_assoc()): ?>
+                        <?php if (count($pacientes) > 0): ?>
+                            <?php foreach ($pacientes as $paciente): ?>
                                 <tr>
                                     <td>#<?= (int)$paciente["id"] ?></td>
                                     <td><strong class="nombre-paciente"><?= htmlspecialchars($paciente["nombre"]) ?></strong></td>
@@ -119,7 +111,7 @@ $resultado = $stmt->get_result();
                                         <a class="eliminar" href="eliminar_paciente.php?id=<?= (int)$paciente["id"] ?>" onclick="return confirm('¿Eliminar paciente?')">🗑️ Eliminar</a>
                                     </td>
                                 </tr>
-                            <?php endwhile; ?>
+                            <?php endforeach; ?>
                         <?php else: ?>
                             <tr><td colspan="5" class="sin-resultados">No hay pacientes registrados.</td></tr>
                         <?php endif; ?>

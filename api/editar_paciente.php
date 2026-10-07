@@ -7,15 +7,8 @@ $id = (int)(
 $stmt = $conexion->prepare(
     "SELECT * FROM pacientes WHERE id = ?"
 );
-$stmt->bind_param(
-    "i",
-    $id
-);
-
-$stmt->execute();
-$paciente = $stmt
-    ->get_result()
-    ->fetch_assoc();
+$stmt->execute([$id]);
+$paciente = $stmt->fetch();
 if (!$paciente) {
     die(
         "Paciente no encontrado."
