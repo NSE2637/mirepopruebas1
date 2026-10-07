@@ -4,7 +4,7 @@ require_once "conexion.php";
 $resultado = $conexion->query("SELECT * FROM pacientes ORDER BY id DESC");
 
 $versiones = [];
-while ($fila_version = $resultado->fetch_assoc()) {
+while ($fila_version = $resultado->fetch()) {
     $versiones[] = $fila_version["id"] . "|" . $fila_version["ubicacion"];
 }
 $version_pantalla = md5(implode(";", $versiones));
@@ -13,7 +13,7 @@ if (isset($_GET["actualizacion"])) {
     header("Content-Type: application/json; charset=utf-8");
     $cambios = [];
     $consulta_cambios = $conexion->query("SELECT id, nombre, ubicacion FROM pacientes ORDER BY id DESC");
-    while ($fila_cambio = $consulta_cambios->fetch_assoc()) {
+    while ($fila_cambio = $consulta_cambios->fetch()) {
         $cambios[] = [
             "id" => (int)$fila_cambio["id"],
             "nombre" => $fila_cambio["nombre"],
@@ -31,7 +31,7 @@ $preparacion = [];
 $cirugia = [];
 $recuperacion = [];
 
-while ($paciente = $resultado->fetch_assoc()) {
+while ($paciente = $resultado->fetch()) {
     $ubicacionPaciente = trim((string)$paciente["ubicacion"]);
     if ($ubicacionPaciente === "Sala de recuperación 2") {
         $ubicacionPaciente = "Sala de recuperación";
@@ -133,7 +133,7 @@ function mostrarPacientes($lista) {
 let pacientesActuales = <?php
     $estado_js = [];
     $resultado_js = $conexion->query("SELECT id, nombre, ubicacion FROM pacientes ORDER BY id DESC");
-    while ($p_js = $resultado_js->fetch_assoc()) {
+    while ($p_js = $resultado_js->fetch()) {
         $estado_js[] = [
             "id" => (int)$p_js["id"],
             "nombre" => $p_js["nombre"],
@@ -281,7 +281,7 @@ if (sonidoActivado) {
 
 setInterval(async () => {
     try {
-        const respuesta = await fetch("Pacientes.php?actualizacion=1&_=" + Date.now(), { cache: "no-store" });
+        const respuesta = await fetch("pacientes.php?actualizacion=1&_=" + Date.now(), { cache: "no-store" });
         const datos = await respuesta.json();
         detectarCambios(datos.pacientes);
     } catch (e) {}
