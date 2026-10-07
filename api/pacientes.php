@@ -95,28 +95,28 @@ function mostrarPacientes($lista) {
     <div class="ubicaciones">
         <div class="columna">
             <h3>Recepción</h3>
-            <div class="lista-pacientes">
+            <div class="lista-pacientes" data-ubicacion="Recepción">
                 <?php mostrarPacientes($recepcion); ?>
             </div>
         </div>
 
         <div class="columna">
             <h3>Sala de preparación</h3>
-            <div class="lista-pacientes">
+            <div class="lista-pacientes" data-ubicacion="Sala de preparación">
                 <?php mostrarPacientes($preparacion); ?>
             </div>
         </div>
 
         <div class="columna">
             <h3>Cirugía</h3>
-            <div class="lista-pacientes">
+            <div class="lista-pacientes" data-ubicacion="Cirugía">
                 <?php mostrarPacientes($cirugia); ?>
             </div>
         </div>
 
         <div class="columna">
             <h3>Sala de recuperación</h3>
-            <div class="lista-pacientes">
+            <div class="lista-pacientes" data-ubicacion="Sala de recuperación">
                 <?php mostrarPacientes($recuperacion); ?>
             </div>
         </div>
@@ -146,145 +146,218 @@ let pacientesActuales = <?php
 const botonSonido = document.getElementById("activarSonido");
 const estadoSonido = document.getElementById("estadoSonido");
 let audioContext = null;
-let sonidoActivado = localStorage.getItem("sonidoPacientes") === "1";
+let sonidoActivado = false;
+let reproduciendo = false;
+const colaCambios = [];
 
-function prepararSonido() {
+function obtenerAudioContext() {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    audioContext = audioContext || new Ctx();
+    return audioContext;
+}
+
+// Chrome/Edge/Safari solo permiten sonido y voz después de que el usuario
+// toque la página. Este desbloqueo debe ocurrir dentro de un clic/tecla.
+function desbloquearAudio() {
     try {
-        audioContext = audioContext || new (window.AudioContext || window.webkitAudioContext)();
-        if (audioContext.state === "suspended") audioContext.resume();
-        sonidoActivado = true;
-        localStorage.setItem("sonidoPacientes", "1");
-        botonSonido.textContent = "🔊 Sonido activado";
-        estadoSonido.textContent = "Avisará y dirá el nombre cuando cambie de ubicación.";
+        const ctx = obtenerAudioContext();
+        if (ctx && ctx.state === "suspended") ctx.resume();
+        if (ctx) {
+            const buffer = ctx.createBuffer(1, 1, 22050);
+            const fuente = ctx.createBufferSource();
+            fuente.buffer = buffer;
+            fuente.connect(ctx.destination);
+            fuente.start(0);
+        }
+        if ("speechSynthesis" in window) {
+            const silencio = new SpeechSynthesisUtterance(" ");
+            silencio.volume = 0;
+            window.speechSynthesis.speak(silencio);
+        }
+        return true;
     } catch (e) {
-        estadoSonido.textContent = "El navegador no permite activar el sonido.";
+        console.error("No se pudo desbloquear el audio:", e);
+        return false;
     }
 }
 
-function sonarDosVeces() {
-    if (!audioContext) return;
-    const ahora = audioContext.currentTime;
+function activarSonido() {
+    if (!desbloquearAudio()) {
+        estadoSonido.textContent = "El navegador no permite activar el sonido.";
+        return;
+    }
+    sonidoActivado = true;
+    localStorage.setItem("sonidoPacientes", "1");
+    botonSonido.textContent = "🔊 Sonido activado";
+    botonSonido.classList.remove("pendiente");
+    estadoSonido.textContent = "Avisará y dirá el nombre cuando cambie de ubicación.";
+    sonarDosVeces();
+}
 
-    // Dos avisos sonoros antes de cada anuncio de voz.
+function sonarDosVeces() {
+    const ctx = audioContext;
+    if (!ctx || ctx.state !== "running") return;
+    const ahora = ctx.currentTime;
+
     [0, 0.22].forEach((tiempo) => {
-        const oscilador = audioContext.createOscillator();
-        const ganancia = audioContext.createGain();
+        const oscilador = ctx.createOscillator();
+        const ganancia = ctx.createGain();
         oscilador.type = "sine";
         oscilador.frequency.value = 760;
         ganancia.gain.setValueAtTime(0.0001, ahora + tiempo);
         ganancia.gain.exponentialRampToValueAtTime(0.18, ahora + tiempo + 0.02);
         ganancia.gain.exponentialRampToValueAtTime(0.0001, ahora + tiempo + 0.16);
         oscilador.connect(ganancia);
-        ganancia.connect(audioContext.destination);
+        ganancia.connect(ctx.destination);
         oscilador.start(ahora + tiempo);
         oscilador.stop(ahora + tiempo + 0.17);
     });
 }
 
-function hablarCambio(cambio) {
-    return new Promise((resolver) => {
-        const nombre = String(cambio.nombre || "").toUpperCase();
-        const ubicacion = String(cambio.ubicacion || "");
-        const texto = nombre + ", en " + ubicacion ;
+let vocesDisponibles = [];
+function cargarVoces() {
+    if ("speechSynthesis" in window) vocesDisponibles = window.speechSynthesis.getVoices();
+}
+if ("speechSynthesis" in window) {
+    cargarVoces();
+    window.speechSynthesis.onvoiceschanged = cargarVoces;
+}
 
+function elegirVozLatina() {
+    const voces = vocesDisponibles;
+    return voces.find(v => /^es[-_]CO$/i.test(v.lang)) ||
+        voces.find(v => /^es[-_]MX$/i.test(v.lang)) ||
+        voces.find(v => /^es[-_]419$/i.test(v.lang)) ||
+        voces.find(v => /^es[-_]US$/i.test(v.lang)) ||
+        voces.find(v => /^es/i.test(v.lang) && /lat|latin|américa|america|colombia|mexico/i.test(v.name)) ||
+        voces.find(v => /^es/i.test(v.lang));
+}
+
+function hablarUnaVez(texto) {
+    return new Promise((fin) => {
         if (!("speechSynthesis" in window)) {
-            setTimeout(resolver, 700);
+            setTimeout(fin, 700);
             return;
         }
+        const voz = elegirVozLatina();
+        const mensaje = new SpeechSynthesisUtterance(texto);
+        mensaje.lang = voz ? voz.lang : "es-419";
+        if (voz) mensaje.voice = voz;
+        mensaje.rate = 0.85;
+        mensaje.pitch = 1;
+        mensaje.volume = 1;
 
-        // Voz en español latinoamericano. Se intenta primero una voz
-        // disponible de Colombia/México/Latinoamérica y, si no existe,
-        // se usa cualquier voz en español disponible en el navegador.
-        const voces = window.speechSynthesis.getVoices();
-        const vozLatina =
-            voces.find(v => /^es-CO$/i.test(v.lang)) ||
-            voces.find(v => /^es-MX$/i.test(v.lang)) ||
-            voces.find(v => /^es-419$/i.test(v.lang)) ||
-            voces.find(v => /^es-/.test(v.lang) && /lat|latin|américa|america|colombia|mexico/i.test(v.name + " " + v.lang)) ||
-            voces.find(v => /^es-/i.test(v.lang)) ||
-            voces.find(v => /^es$/i.test(v.lang));
+        let terminado = false;
+        const terminar = () => {
+            if (terminado) return;
+            terminado = true;
+            setTimeout(fin, 250);
+        };
+        mensaje.onend = terminar;
+        mensaje.onerror = terminar;
+        // Algunos navegadores nunca disparan onend; se evita que la cola se quede trabada.
+        setTimeout(terminar, 8000);
 
-        const hablarUnaVez = () => new Promise((fin) => {
-            const mensaje = new SpeechSynthesisUtterance(texto);
-            mensaje.lang = vozLatina ? vozLatina.lang : "es-419";
-            mensaje.rate = 0.85;
-            mensaje.pitch = 1;
-            mensaje.volume = 1;
-            if (vozLatina) mensaje.voice = vozLatina;
-            mensaje.onend = () => setTimeout(fin, 250);
-            mensaje.onerror = () => setTimeout(fin, 250);
-            window.speechSynthesis.speak(mensaje);
-        });
-
-        // Repetir el anuncio exactamente dos veces.
-        (async () => {
-            await hablarUnaVez();
-            await hablarUnaVez();
-            resolver();
-        })();
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
+        window.speechSynthesis.speak(mensaje);
     });
 }
 
-async function reproducirCambiosEnOrden(cambios) {
-    if (!sonidoActivado || cambios.length === 0) return;
-
+async function procesarCola() {
+    if (reproduciendo) return;
+    reproduciendo = true;
     try {
-        audioContext = audioContext || new (window.AudioContext || window.webkitAudioContext)();
-        if (audioContext.state === "suspended") await audioContext.resume();
-
-        // Se procesan uno por uno: si cambian 3 pacientes al mismo tiempo,
-        // se anuncian consecutivamente y no se pisan las voces.
-        for (const cambio of cambios) {
+        while (colaCambios.length > 0) {
+            const cambio = colaCambios.shift();
+            const texto = String(cambio.nombre || "").toUpperCase() + ", en " + String(cambio.ubicacion || "");
             sonarDosVeces();
             await new Promise(r => setTimeout(r, 600));
-            await hablarCambio(cambio);
+            await hablarUnaVez(texto);
+            await hablarUnaVez(texto);
         }
     } catch (e) {
         console.error("Error de sonido/voz:", e);
+    } finally {
+        reproduciendo = false;
     }
+}
+
+function normalizarUbicacion(ubicacion) {
+    const limpia = String(ubicacion || "").trim();
+    return limpia === "Sala de recuperación 2" ? "Sala de recuperación" : limpia;
+}
+
+// Se actualiza la pantalla sin recargar la página: recargar borra el permiso
+// de audio que el navegador dio al tocar el botón y por eso dejaba de sonar.
+function pintarPacientes(pacientes) {
+    document.querySelectorAll(".lista-pacientes[data-ubicacion]").forEach((contenedor) => {
+        const lista = pacientes.filter(p => normalizarUbicacion(p.ubicacion) === contenedor.dataset.ubicacion);
+        contenedor.replaceChildren();
+        if (lista.length === 0) {
+            const vacio = document.createElement("p");
+            vacio.className = "sin-pacientes";
+            vacio.textContent = "No hay pacientes";
+            contenedor.appendChild(vacio);
+            return;
+        }
+        lista.forEach((p) => {
+            const tarjeta = document.createElement("div");
+            tarjeta.className = "paciente";
+            const nombre = document.createElement("strong");
+            nombre.className = "nombre-paciente";
+            nombre.textContent = p.nombre;
+            tarjeta.appendChild(nombre);
+            contenedor.appendChild(tarjeta);
+        });
+    });
 }
 
 function detectarCambios(nuevosPacientes) {
     const cambiosUbicacion = [];
-
     nuevosPacientes.forEach(nuevo => {
         const anterior = pacientesActuales.find(p => Number(p.id) === Number(nuevo.id));
-        if (anterior && anterior.ubicacion !== nuevo.ubicacion) {
-            cambiosUbicacion.push({
-                id: nuevo.id,
-                nombre: nuevo.nombre,
-                ubicacion: nuevo.ubicacion
-            });
+        if (anterior && normalizarUbicacion(anterior.ubicacion) !== normalizarUbicacion(nuevo.ubicacion)) {
+            cambiosUbicacion.push({ id: nuevo.id, nombre: nuevo.nombre, ubicacion: normalizarUbicacion(nuevo.ubicacion) });
         }
     });
 
     const huboCambio = JSON.stringify(pacientesActuales) !== JSON.stringify(nuevosPacientes);
     pacientesActuales = nuevosPacientes;
 
-    if (cambiosUbicacion.length > 0) {
-        // Todos los cambios detectados en la misma actualización entran en una cola.
-        reproducirCambiosEnOrden(cambiosUbicacion).then(() => {
-            window.location.reload();
-        });
-    } else if (huboCambio) {
-        setTimeout(() => window.location.reload(), 500);
+    if (huboCambio) pintarPacientes(nuevosPacientes);
+    if (cambiosUbicacion.length > 0 && sonidoActivado) {
+        colaCambios.push(...cambiosUbicacion);
+        procesarCola();
     }
 }
 
+botonSonido.addEventListener("click", activarSonido);
 
-botonSonido.addEventListener("click", prepararSonido);
-
-if (sonidoActivado) {
-    botonSonido.textContent = "🔊 Sonido activado";
-    estadoSonido.textContent = "Avisará y dirá el nombre cuando cambie de ubicación.";
+// Si ya se había activado antes, el navegador igual exige un toque tras abrir
+// la página: el primer clic o tecla en cualquier parte reactiva el sonido.
+if (localStorage.getItem("sonidoPacientes") === "1") {
+    botonSonido.textContent = "🔊 Toca para reactivar el sonido";
+    botonSonido.classList.add("pendiente");
+    estadoSonido.textContent = "El navegador pide un toque en la pantalla para permitir el sonido.";
+    const reactivar = (evento) => {
+        if (evento.target === botonSonido) return;
+        activarSonido();
+    };
+    document.addEventListener("pointerdown", reactivar, { once: true });
+    document.addEventListener("keydown", reactivar, { once: true });
 }
 
 setInterval(async () => {
     try {
         const respuesta = await fetch("pacientes.php?actualizacion=1&_=" + Date.now(), { cache: "no-store" });
+        if (!respuesta.ok) return;
         const datos = await respuesta.json();
         detectarCambios(datos.pacientes);
-    } catch (e) {}
+    } catch (e) {
+        console.error("Error al actualizar pacientes:", e);
+    }
 }, 5000);
 </script>
 </body>

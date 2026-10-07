@@ -659,6 +659,20 @@ tr:hover td {
     background: #0796b5;
 }
 
+.boton-sonido.pendiente {
+    background: #c62828;
+    animation: pulso-sonido 1.4s ease-in-out infinite;
+}
+
+@keyframes pulso-sonido {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(198, 40, 40, 0.45); }
+    50% { box-shadow: 0 0 0 8px rgba(198, 40, 40, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .boton-sonido.pendiente { animation: none; }
+}
+
 #estadoSonido {
     color: #607d8b;
     font-size: 14px;
