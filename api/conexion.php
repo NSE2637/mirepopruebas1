@@ -23,10 +23,14 @@ $base_datos = ltrim($partes["path"], "/");
 $usuario = urldecode($partes["user"]);
 $contraseña = urldecode($partes["pass"]);
 
+// El libpq del runtime PHP de Vercel no envía SNI, así que Neon necesita
+// el ID del endpoint explícito (ej: ep-wild-truth-b4mcdik3).
+$endpoint = str_replace("-pooler", "", explode(".", $host)[0]);
+
 try {
 
     $conexion = new PDO(
-        "pgsql:host=$host;port=$puerto;dbname=$base_datos;sslmode=require",
+        "pgsql:host=$host;port=$puerto;dbname=$base_datos;sslmode=require;options='endpoint=$endpoint'",
         $usuario,
         $contraseña
     );
