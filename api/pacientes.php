@@ -124,7 +124,7 @@ function mostrarPacientes($lista) {
 
     <div class="control-sonido">
         <button type="button" id="activarSonido" class="boton-sonido">🔊 Activar sonido</button>
-        <span id="estadoSonido">El sonido avisará cuando haya un cambio.</span>
+        <span id="estadoSonido">Toca el botón para que suene cuando aparezca un paciente.</span>
     </div>
     <p class="actualizacion">La pantalla se actualiza automáticamente cada 5 segundos.</p>
 </main>
@@ -191,7 +191,7 @@ function activarSonido() {
     localStorage.setItem("sonidoPacientes", "1");
     botonSonido.textContent = "🔊 Sonido activado";
     botonSonido.classList.remove("pendiente");
-    estadoSonido.textContent = "Avisará y dirá el nombre cuando cambie de ubicación.";
+    estadoSonido.textContent = "Sonará y dirá el nombre cada vez que aparezca un paciente en pantalla.";
     sonarDosVeces();
 }
 
@@ -318,7 +318,9 @@ function detectarCambios(nuevosPacientes) {
     const cambiosUbicacion = [];
     nuevosPacientes.forEach(nuevo => {
         const anterior = pacientesActuales.find(p => Number(p.id) === Number(nuevo.id));
-        if (anterior && normalizarUbicacion(anterior.ubicacion) !== normalizarUbicacion(nuevo.ubicacion)) {
+        const esNuevo = !anterior;
+        const cambioUbicacion = anterior && normalizarUbicacion(anterior.ubicacion) !== normalizarUbicacion(nuevo.ubicacion);
+        if (esNuevo || cambioUbicacion) {
             cambiosUbicacion.push({ id: nuevo.id, nombre: nuevo.nombre, ubicacion: normalizarUbicacion(nuevo.ubicacion) });
         }
     });
